@@ -64,8 +64,11 @@ class Report(object):
         data = {
             "model": "uplogin.jsp",
             "service": "https://weixine.ustc.edu.cn/2020/caslogin",
+            "warn": "",
+            "showCode": "",
             "username": self.stuid,
             "password": self.password,
+            "button": "",
         }
         session = requests.Session()
         session.post(url, data=data)
