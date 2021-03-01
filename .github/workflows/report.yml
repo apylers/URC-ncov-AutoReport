@@ -24,4 +24,4 @@ jobs:
         env:
           STUID: ${{ secrets.Stuid }}
           PASSWORD: ${{ secrets.Password }}
-        run: python report.py data_home.json "$STUID" "$PASSWORD"
+        run: python report.py data_school.json "$STUID" "$PASSWORD"
