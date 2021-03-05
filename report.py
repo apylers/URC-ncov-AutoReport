@@ -10,17 +10,31 @@ from bs4 import BeautifulSoup
 
 class Report(object):
     def __init__(self, stuid, password, data_file):
-        self.stuid = stuid
-        self.password = password
         self.data_file = data_file
+        self.session = self.login(stuid, password, "https://weixine.ustc.edu.cn/2020/caslogin")
+
+    def login(self, stuid, password, service):
+        print("Login...")
+
+        data = {
+            "model": "uplogin.jsp",
+            "service": service,
+            "warn": "",
+            "showCode": "",
+            "username": stuid,
+            "password": password,
+            "button": "",
+        }
+        session = requests.Session()
+        session.post("https://passport.ustc.edu.cn/login", data=data)
+
+        print("Login Successfully!")
+
+        return session
 
     def report(self):
-        session = self.login()
-        cookies = session.cookies
-
-        data = session.get("https://weixine.ustc.edu.cn/2020").text
-        data = data.encode("ascii", "ignore").decode("utf-8", "ignore")
-        soup = BeautifulSoup(data, "html.parser")
+        html = self.session.get("https://weixine.ustc.edu.cn/2020").text
+        soup = BeautifulSoup(html, "html.parser")
         token = soup.find("input", {"name": "_token"})["value"]
 
         with open(self.data_file, "r+") as f:
@@ -28,52 +42,26 @@ class Report(object):
             data = json.loads(data)
             data["_token"] = token
 
-        cookies = "laravel_session=" + cookies.get("laravel_session")
+        self.session.post("https://weixine.ustc.edu.cn/2020/daliy_report", data=data)
 
-        headers = {"cookie": cookies}
+        return self.check()
 
-        url = "https://weixine.ustc.edu.cn/2020/daliy_report"
-        session.post(url, data=data, headers=headers)
-        data = session.get("https://weixine.ustc.edu.cn/2020").text
-        soup = BeautifulSoup(data, "html.parser")
-        token = soup.find("span", {"style": "position: relative; top: 5px; color: #666;"}).text
+    def check(self):
+        html = self.session.get("https://weixine.ustc.edu.cn/2020").text
+        soup = BeautifulSoup(html, "html.parser")
+        date_text = soup.find("span", {"style": "position: relative; top: 5px; color: #666;"}).text
         pattern = re.compile("202[0-9]-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}")
 
-        flag = False
-        if date := pattern.search(token).group():
-            print("Latest report:", date)
+        if date := pattern.search(date_text).group():
+            print("Latest Report:", date)
             date += " +0800"
             report_time = datetime.strptime(date, "%Y-%m-%d %H:%M:%S %z")
             now_time = datetime.now(pytz.timezone("Asia/Shanghai"))
             delta = now_time - report_time
-            print(delta.seconds)
             if delta.seconds < 60:
-                flag = True
+                return True
 
-        if flag:
-            print("Report SUCCESSFUL!")
-        else:
-            print("Report FAILED!")
-
-        return flag
-
-    def login(self):
-        print("Login...")
-
-        url = "https://passport.ustc.edu.cn/login"
-        data = {
-            "model": "uplogin.jsp",
-            "service": "https://weixine.ustc.edu.cn/2020/caslogin",
-            "warn": "",
-            "showCode": "",
-            "username": self.stuid,
-            "password": self.password,
-            "button": "",
-        }
-        session = requests.Session()
-        session.post(url, data=data)
-
-        return session
+        return False
 
 
 if __name__ == "__main__":
@@ -82,11 +70,17 @@ if __name__ == "__main__":
     parser.add_argument("stuid", help="Student ID", type=str)
     parser.add_argument("password", help="Password", type=str)
     args = parser.parse_args()
+
     auto_reporter = Report(stuid=args.stuid, password=args.password, data_file=args.data_file)
 
     for i in range(3):
-        if auto_reporter.report():
-            break
-        print("Report Failed, retry...")
+        try:
+            if auto_reporter.report():
+                print("Report Successfully!")
+                break
+        except:
+            pass
+        print("Report Failed. Retry...")
     else:
+        print("Report Failed!")
         exit(-1)
